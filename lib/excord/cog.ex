@@ -4,6 +4,7 @@ defmodule Excord.Cog do
       import unquote(__MODULE__)
       require Logger
 
+      @events []
       @commands []
       @current_cog unquote(name)
 
@@ -16,6 +17,10 @@ defmodule Excord.Cog do
       def __commands__ do
         @commands
       end
+
+      def __events__ do
+        @events
+      end
     end
   end
 
@@ -23,10 +28,14 @@ defmodule Excord.Cog do
     {name, ctx, args} = func
 
     quote do
+      Logger.debug("Registering command #{unquote(name)}")
+
+      command = {__MODULE__, unquote(name)}
       unquote({:def, ctx, [{name, ctx, args}, body]})
 
-      Logger.info("Register command #{unquote(name)}")
-      @commands [{__MODULE__, unquote(name)} | @commands]
+      unless Enum.member?(@commands, command) do
+        @commands [command | @commands]
+      end
     end
   end
 
@@ -34,10 +43,32 @@ defmodule Excord.Cog do
     {name, ctx, args} = func
 
     quote do
+      Logger.debug("Registering subcommand #{@current_cog}:#{unquote(name)}")
+
+      command = {__MODULE__, unquote(name)}
       unquote({:def, ctx, [{name, ctx, args}, body]})
 
-      Logger.info("Register subcommand #{@current_cog}:#{unquote(name)}")
-      @commands [{@current_cog, {__MODULE__, unquote(name)}} | @commands]
+      unless Enum.member?(@commands, command) do
+        @commands [command | @commands]
+      end
     end
   end
+
+  # defmacro on(func, body) do
+  #   {name, ctx, args} = func
+
+  #   quote do
+  #     Logger.debug("Registering event on_#{unquote(name)}")
+
+  #     event = {__MODULE__, unquote(name)}
+  #     unquote({:def, ctx, [{name, ctx, args}, body]})
+
+  #     unless Enum.member?(@events, event) do
+  #       @events [event | @events]
+  #     end
+  #     # def handle_event(unquote(name), unquote_splicing(args)) do
+  #     #   unquote(body)
+  #     # end
+  #   end
+  # end
 end

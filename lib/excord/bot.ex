@@ -15,9 +15,20 @@ defmodule Excord.Bot do
       require Logger
 
       @otp_app unquote(opts)[:otp_app] || raise("bot expects :otp_app to be given")
+      @events []
 
       unquote(server())
       unquote(handlers())
+
+      @before_compile unquote(__MODULE__)
+    end
+  end
+
+  defmacro __before_compile__(_env) do
+    quote do
+      def __events__ do
+        @events
+      end
     end
   end
 
@@ -34,12 +45,19 @@ defmodule Excord.Bot do
       end
 
       def start_link(opts \\ []) do
-        Supervisor.start_link(__MODULE__, [unquote(__MODULE__)], name: __MODULE__)
+        {:ok, pid} = Supervisor.start_link(__MODULE__, [unquote(__MODULE__)], name: __MODULE__)
+
+        Enum.each __events__(), fn event ->
+          __register_event__(event)
+        end
+
+        {:ok, pid}
       end
 
       def init(_opts) do
         children = [
-          {Excord.Api.Gateway, [bot_module: __MODULE__, otp_app: @otp_app]}
+          Excord.Api.EventRegistry,
+          {Excord.Api.Gateway, [bot_module: __MODULE__, otp_app: @otp_app]},
         ]
 
         Supervisor.init(children, strategy: :one_for_one)
@@ -82,10 +100,18 @@ defmodule Excord.Bot do
 
   defmacro on(func, body) do
     {name, ctx, args} = func
+    event = String.to_atom("on_#{name}")
 
     quote do
-      Logger.debug("Registering event on_#{unquote(name)}")
-      unquote({:def, ctx, [{:"on_#{name}", ctx, args}, body]})
+      unquote({:def, ctx, [{event, ctx, args}, body]})
+
+      unless Enum.member?(@events, unquote(event)) do
+        @events [unquote(event) | @events]
+
+        def __register_event__(unquote(event)) do
+          Excord.Api.EventRegistry.subscribe(unquote(event), __MODULE__)
+        end
+      end
     end
   end
 

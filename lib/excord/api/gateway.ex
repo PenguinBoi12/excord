@@ -7,6 +7,9 @@ defmodule Excord.Api.Gateway do
   @gateway_url "wss://gateway.discord.gg/?v=10&encoding=json"
 
   def start_link(opts) do
+    # shouldn't need the bot_module anymore except for the config. Should we consider passing the
+    # config directly instead.
+
     bot_module = Keyword.get(opts, :bot_module) || raise "Gateway requires :bot_module option"
     otp_app = Keyword.get(opts, :otp_app) || raise "Gateway requires :otp_app option"
 
@@ -47,8 +50,9 @@ defmodule Excord.Api.Gateway do
   defp handle_payload(%{op: 0, t: event, s: seq, d: data}, state) do
     Logger.debug("Received Gateway Event: #{event}")
 
-    {event, data} = Excord.Api.Event.handle_event(event, data)
-    apply(state.bot_module, :handle_event, [event, data])
+    event
+    |> Excord.Api.Event.handle_event(data)
+    |> Excord.Api.Event.dispatch()
 
     {:ok, %{state | seq: seq}}
   end

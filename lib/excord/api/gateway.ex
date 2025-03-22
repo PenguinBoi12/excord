@@ -7,21 +7,11 @@ defmodule Excord.Api.Gateway do
   @gateway_url "wss://gateway.discord.gg/?v=10&encoding=json"
 
   def start_link(opts) do
-    # shouldn't need the bot_module anymore except for the config. Should we consider passing the
-    # config directly instead.
-
-    bot_module = Keyword.get(opts, :bot_module) || raise "Gateway requires :bot_module option"
-    otp_app = Keyword.get(opts, :otp_app) || raise "Gateway requires :otp_app option"
-
-    config = Application.get_env(otp_app, bot_module)
-
-    token = Keyword.get(config, :token) || raise "'token' is missing"
-    intents = Keyword.get(config, :intents, 513)
-    activities = Keyword.get(config, :activities, [])
+    token = Keyword.get(opts, :token) || raise "'token' is missing"
+    intents = Keyword.get(opts, :intents, 513)
+    activities = Keyword.get(opts, :activities, [])
 
     state = %{
-      bot_module: bot_module,
-      otp_app: otp_app,
       token: token,
       intents: intents,
       activities: activities,
@@ -33,10 +23,8 @@ defmodule Excord.Api.Gateway do
     WebSockex.start_link(@gateway_url, __MODULE__, state, name: __MODULE__)
   end
 
-  def handle_frame({:text, msg}, state) do
-    payload = Jason.decode!(msg, keys: :atoms)
-    handle_payload(payload, state)
-  end
+  def handle_frame({:text, msg}, state),
+    do: Jason.decode!(msg, keys: :atoms) |> handle_payload(state)
 
   defp handle_payload(%{op: 10, d: %{heartbeat_interval: interval}}, state) do
     Logger.info("Connected to Discord Gateway")
@@ -49,47 +37,56 @@ defmodule Excord.Api.Gateway do
 
   defp handle_payload(%{op: 0, t: event, s: seq, d: data}, state) do
     Logger.debug("Received Gateway Event: #{event}")
-
-    event
-    |> Excord.Api.Event.handle_event(data)
-    |> Excord.Api.Event.dispatch()
+    Excord.Api.Event.handle_event(event, data)
 
     {:ok, %{state | seq: seq}}
   end
 
-  defp handle_payload(%{op: 11}, state) do
-    {:ok, %{state | last_heartbeat_ack: true}}
-  end
+  defp handle_payload(%{op: 11}, state),
+    do: {:ok, %{state | last_heartbeat_ack: true}}
 
   defp handle_payload(%{op: op}, state) do
     Logger.debug("Received Gateway Op #{op}")
     {:ok, state}
   end
 
-  def handle_info(:heartbeat, state) do
-    if state.last_heartbeat_ack do
-      send_heartbeat(state.seq)
-      schedule_heartbeat(state.heartbeat_interval)
-      {:ok, %{state | last_heartbeat_ack: false}}
-    else
-      Logger.warning("No heartbeat ACK received, reconnecting...")
-      {:close, {1000, "No heartbeat ACK"}, state}
-    end
+  def handle_info(:heartbeat, %{last_heartbeat_ack: true} = state) do
+    Logger.debug("Sending heartbeat")
+
+    send_heartbeat(state.seq)
+    schedule_heartbeat(state.heartbeat_interval)
+
+    {:ok, %{state | last_heartbeat_ack: false}}
   end
 
-  defp send_heartbeat(seq) do
-    payload = Jason.encode!(%{op: 1, d: seq})
+  def handle_info(:heartbeat, state) do
+    Logger.warning("No heartbeat ACK received, reconnecting...")
+    {:close, {1000, "No heartbeat ACK"}, state}
+  end
+
+  def handle_cast({:send, frame}, state),
+    do: {:reply, {:text, frame}, state}
+
+  def handle_disconnect(_disconnect_map, state) do
+    Logger.warning("Gateway disconnected, reconnecting...")
+    {:reconnect, state}
+  end
+
+  defp send_payload(data) do
+    payload = Jason.encode!(data)
     WebSockex.cast(self(), {:send, payload})
   end
 
-  defp schedule_heartbeat(interval) do
-    Process.send_after(self(), :heartbeat, interval)
-  end
+  defp send_heartbeat(seq),
+    do: send_payload(%{op: 1, d: seq})
+
+  defp schedule_heartbeat(interval),
+    do: Process.send_after(self(), :heartbeat, interval)
 
   defp identify(state) do
     {_, os_name} = :os.type
 
-    payload = Jason.encode!(%{
+    send_payload(%{
       op: 2,
       d: %{
         token: state.token,
@@ -99,25 +96,12 @@ defmodule Excord.Api.Gateway do
           browser: "excord",
           device: "excord"
         },
-        # TODO: Build this elsewhere?
         presence: %{
           activities: state.activities,
           status: "online",
-          since: 91879201,
           afk: false
         },
       }
     })
-
-    WebSockex.cast(self(), {:send, payload})
-  end
-
-  def handle_cast({:send, frame}, state) do
-    {:reply, {:text, frame}, state}
-  end
-
-  def handle_disconnect(_disconnect_map, state) do
-    Logger.warning("Gateway disconnected, reconnecting...")
-    {:reconnect, state}
   end
 end

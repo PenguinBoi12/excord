@@ -1,61 +1,60 @@
 defmodule Excord.Api.Event do
   require Logger
 
-  def dispatch({event, data}),
-    do: Excord.Api.EventRegistry.publish(event, data)
+  @registry_name :excord_event_registry
+
+  def dispatch({event, data}) do
+    Registry.dispatch @registry_name, event, fn entries ->
+      for {_pid, module} <- entries do
+        try do
+          apply(module, event, [data])
+        rescue e ->
+          Logger.error("Error dispatching #{event} to #{inspect(module)}: #{inspect(e)}")
+        end
+      end
+    end
+  end
 
   def register(event, module),
-    do: Excord.Api.EventRegistry.subscribe(event, module)
+    do: Registry.register(@registry_name, event, module)
 
-  def handle_event("READY", data) do
-    {:on_ready, data}
-  end
+  def handle_event("READY", data), 
+    do: dispatch({:on_ready, data})
 
-  def handle_event("RESUMED", data) do
-    {:on_resumed, data}
-  end
+  def handle_event("RESUMED", data), 
+    do: dispatch({:on_resumed, data})
 
-  def handle_event("TYPING_START", data) do
-    {:on_typing, data}
-  end
+  def handle_event("TYPING_START", data), 
+    do: dispatch({:on_typing, data})
 
   # GUILD
-  def handle_event("GUILD_CREATE", data) do
-    {:on_guild_create, data}
-  end
+  def handle_event("GUILD_CREATE", data),
+    do: dispatch({:on_guild_create, data})
 
-  def handle_event("GUILD_UPDATE", data) do
-    {:on_guild_update, data}
-  end
+  def handle_event("GUILD_UPDATE", data),
+    do: dispatch({:on_guild_update, data})
 
-  def handle_event("GUILD_DELETE", data) do
-    {:on_guild_delete, data}
-  end
+  def handle_event("GUILD_DELETE", data),
+    do: dispatch({:on_guild_delete, data})
 
   # MESSAGE
-  def handle_event("MESSAGE_CREATE", data) do
-    {:on_message, data}
-  end
+  def handle_event("MESSAGE_CREATE", data),
+    do: dispatch({:on_message, data})
 
-  def handle_event("MESSAGE_UPDATE", data) do
-    {:on_message_edit, data}
-  end
+  def handle_event("MESSAGE_UPDATE", data),
+    do: dispatch({:on_message_edit, data})
 
-  def handle_event("MESSAGE_DELETE", data) do
-    {:on_message_delete, data}
-  end
+  def handle_event("MESSAGE_DELETE", data),
+    do: dispatch({:on_message_delete, data})
 
-  def handle_event("MESSAGE_DELETE_BULK", data) do
-    {:on_bulk_message_delete, data}
-  end
+  def handle_event("MESSAGE_DELETE_BULK", data),
+    do: dispatch({:on_bulk_message_delete, data})
 
-  def handle_event("MESSAGE_REACTION_ADD", data) do
-    {:on_reaction_add, data}
-  end
+  def handle_event("MESSAGE_REACTION_ADD", data),
+    do: dispatch({:on_reaction_add, data})
 
-  def handle_event("MESSAGE_REACTION_REMOVE", data) do
-    {:on_reaction_remove, data}
-  end
+  def handle_event("MESSAGE_REACTION_REMOVE", data),
+    do: dispatch({:on_reaction_remove, data})
 
   # USERS
 
@@ -69,8 +68,6 @@ defmodule Excord.Api.Event do
 
   # PRESENCE
 
-  def handle_event(event, _data, _state) do
-    Logger.warning("Event #{event} not found")
-    {nil, :not_found}
-  end
+  def handle_event(event, _data, _state),
+    do: Logger.warning("Event #{event} not found")
 end

@@ -52,10 +52,14 @@ defmodule Excord.Bot do
       def start_link(opts \\ []) do
         {:ok, pid} = Supervisor.start_link(__MODULE__, [unquote(__MODULE__)], name: __MODULE__)
 
+        # I'm unsure if this is how we want to handle bot vs shared
         Enum.each [__MODULE__ | __cogs__()], fn module ->
-          Enum.each module.__events__(), fn event ->
-            module.__register_event__(event)
-          end
+          Enum.each module.__events__(), fn
+            {:shared, event} ->
+              module.__register_event__(event)
+            {:bot, event} ->
+              module.__register_event__(__MODULE__, event)
+            end
         end
 
         {:ok, pid}
@@ -63,13 +67,17 @@ defmodule Excord.Bot do
 
       def init(_opts) do
         config = Application.get_env(@otp_app, __MODULE__)
+        bot = to_string(__MODULE__) |> String.to_atom()
+
+        registry_name = :"event_registry_#{bot}"
 
         children = [
-          {Registry, keys: :unique, name: :excord_event_registry},
-          {Excord.Api.Gateway, config},
+          {Registry, keys: :duplicate, name: :"event_registry_#{bot}"},
+          {Excord.Api.Gateway, [module: __MODULE__, config: config]}
         ]
 
-        Supervisor.init(children, strategy: :one_for_one)
+        opts = [strategy: :one_for_one, name: __MODULE__.Supervisor]
+        Supervisor.init(children, opts)
       end
 
       defoverridable start_link: 0
@@ -115,10 +123,11 @@ defmodule Excord.Bot do
       unquote({:def, ctx, [{event, ctx, args}, body]})
 
       unless Enum.member?(@events, unquote(event)) do
-        @events [unquote(event) | @events]
+        Logger.debug("Registering event #{__MODULE__}.#{unquote(event)}")
+        @events [{:bot, unquote(event)} | @events]
 
-        def __register_event__(unquote(event)) do
-          Excord.Api.Event.register(unquote(event), __MODULE__)
+        def __register_event__(bot, unquote(event)) do
+          Excord.Api.Event.register(bot, unquote(event), __MODULE__)
         end
       end
     end

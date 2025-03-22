@@ -56,16 +56,16 @@ defmodule Excord.Cog do
 
   defmacro on(func, body) do
     {name, ctx, args} = func
-    event = String.to_atom("on_#{name}")
+    event = :"on_#{name}"
 
     quote do
       unquote({:def, ctx, [{event, ctx, args}, body]})
 
       unless Enum.member?(@events, unquote(event)) do
-        @events [unquote(event) | @events]
+        @events [{:bot, unquote(event)} | @events]
 
-        def __register_event__(unquote(event)) do
-          Excord.Api.Event.register(unquote(event), __MODULE__)
+        def __register_event__(bot, unquote(event)) do
+          Excord.Api.Event.register(bot, unquote(event), __MODULE__)
         end
       end
     end

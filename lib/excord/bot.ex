@@ -14,8 +14,9 @@ defmodule Excord.Bot do
       import unquote(__MODULE__)
       require Logger
 
-      @otp_app unquote(opts)[:otp_app] || raise("bot expects :otp_app to be given")
+      @cogs []
       @events []
+      @otp_app unquote(opts)[:otp_app] || raise("bot expects :otp_app to be given")
 
       unquote(server())
       unquote(handlers())
@@ -29,10 +30,14 @@ defmodule Excord.Bot do
       def __events__ do
         @events
       end
+
+      def __cogs__ do
+        @cogs
+      end
     end
   end
 
-  defp server() do
+  defp server do
     quote do
       use Supervisor
 
@@ -47,17 +52,21 @@ defmodule Excord.Bot do
       def start_link(opts \\ []) do
         {:ok, pid} = Supervisor.start_link(__MODULE__, [unquote(__MODULE__)], name: __MODULE__)
 
-        Enum.each __events__(), fn event ->
-          __register_event__(event)
+        Enum.each [__MODULE__ | __cogs__()], fn module ->
+          Enum.each module.__events__(), fn event ->
+            module.__register_event__(event)
+          end
         end
 
         {:ok, pid}
       end
 
       def init(_opts) do
+        config = Application.get_env(@otp_app, __MODULE__)
+
         children = [
-          Excord.Api.EventRegistry,
-          {Excord.Api.Gateway, [bot_module: __MODULE__, otp_app: @otp_app]},
+          {Registry, keys: :unique, name: :excord_event_registry},
+          {Excord.Api.Gateway, config},
         ]
 
         Supervisor.init(children, strategy: :one_for_one)
@@ -67,7 +76,7 @@ defmodule Excord.Bot do
     end
   end
 
-  defp handlers() do
+  defp handlers do
     quote do
       def handle_command(_, _, _) do
         {:error, :command_not_found}
@@ -109,7 +118,7 @@ defmodule Excord.Bot do
         @events [unquote(event) | @events]
 
         def __register_event__(unquote(event)) do
-          Excord.Api.EventRegistry.subscribe(unquote(event), __MODULE__)
+          Excord.Api.Event.register(unquote(event), __MODULE__)
         end
       end
     end
@@ -120,6 +129,8 @@ defmodule Excord.Bot do
     commands = module.__commands__()
 
     quote do
+      @cogs [unquote(module) | @cogs]
+
       unquote_splicing(Enum.map(commands, fn
         {group, {module, identifier}} ->
           quote do

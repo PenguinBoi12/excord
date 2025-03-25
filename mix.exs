@@ -14,6 +14,7 @@ defmodule Excord.MixProject do
   # Run "mix help compile.app" to learn about applications.
   def application do
     [
+      mod: {Excord, []},
       extra_applications: [:logger, :websockex]
     ]
   end

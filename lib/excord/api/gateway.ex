@@ -6,12 +6,13 @@ defmodule Excord.Api.Gateway do
 
   @gateway_url "wss://gateway.discord.gg/?v=10&encoding=json"
 
-  def start_link(opts) do
-    token = Keyword.get(opts, :token) || raise "'token' is missing"
-    intents = Keyword.get(opts, :intents, 513)
-    activities = Keyword.get(opts, :activities, [])
+  def start_link([module: module, config: config]) do
+    token = Keyword.get(config, :token) || raise "'token' is missing"
+    intents = Keyword.get(config, :intents, 513)
+    activities = Keyword.get(config, :activities, [])
 
     state = %{
+      bot: module,
       token: token,
       intents: intents,
       activities: activities,
@@ -20,7 +21,8 @@ defmodule Excord.Api.Gateway do
       last_heartbeat_ack: true
     }
 
-    WebSockex.start_link(@gateway_url, __MODULE__, state, name: __MODULE__)
+    name = Module.concat(module, Excord.Api.Gateway)
+    WebSockex.start_link(@gateway_url, __MODULE__, state, name: name)
   end
 
   def handle_frame({:text, msg}, state),

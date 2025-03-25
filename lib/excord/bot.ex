@@ -65,8 +65,7 @@ defmodule Excord.Bot do
         config = Application.get_env(@otp_app, __MODULE__)
 
         children = [
-          {Registry, keys: :unique, name: :excord_event_registry},
-          {Excord.Api.Gateway, config},
+          {Excord.Api.Gateway, [module: __MODULE__, config: config]},
         ]
 
         Supervisor.init(children, strategy: :one_for_one)

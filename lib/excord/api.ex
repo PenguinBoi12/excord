@@ -1,49 +1,81 @@
 defmodule Excord.Api do
-	require Req
-	require Jason
+  use GenServer
 
-	@discord_version 10
-	@discord_url "https://discord.com/api/v#{@discord_version}"
+  require Req
+  require Jason
 
-	def request(method, token, url, args \\ []) do
-		req = Req.new(
-			method: method,
-			base_url: @discord_url,
-			url: url,
-			headers: %{
-				authorization: "bearer #{token}",
-				user_agent: "Excord (https://github.com/PenguinBoi12/excord, 1.0.0-rc.1)"
-			}
-		)
+  @discord_version 10
+  @discord_url "https://discord.com/api/v#{@discord_version}"
 
-		do_request(req, args)
-	end
+  def start_link([module: module, config: config]) do
+    token = Keyword.get(config, :token) || raise "'token' is missing"
 
-	defp do_request(%{method: :get} = req, params) do
-		req = Req.merge(req, params: params)
-		{_, resp} = Req.run(req)
+    state = %{
+      bot: module,
+      token: token
+    }
 
-		resp
-	end
+    # name = Module.concat(module, Excord.Api)
+    GenServer.start_link(__MODULE__, state, name: __MODULE__)
+  end
 
-	defp do_request(%{method: :post} = req, params) do
-		req = Req.merge(req, params: params)
-		{_, resp} = Req.run(req)
+  def request(method, url, params_or_body \\ [])
 
-		resp
-	end
+  def request(:get, url, params) do
+    req = Req.new(
+      method: :get,
+      base_url: @discord_url,
+      url: url,
+      params: params
+    )
 
-	defp do_request(%{method: :put} = req, params) do
-		req = Req.merge(req, params: params)
-		{_, resp} = Req.run(req)
+    GenServer.call(__MODULE__, {:request, req})
+  end
 
-		resp
-	end
+  def request(:post, url, body) do
+    req = Req.new(
+      method: :post,
+      base_url: @discord_url,
+      url: url,
+      body: Jason.encode!(body)
+    )
 
-	defp do_request(%{method: :delete} = req, params) do
-		req = Req.merge(req, params: params)
-		{_, resp} = Req.request(req)
+    GenServer.call(__MODULE__, {:request, req})
+  end
 
-		resp
-	end
+  def request(:put, url, body) do
+    req = Req.new(
+      method: :put,
+      base_url: @discord_url,
+      url: url,
+      body: Jason.encode!(body)
+    )
+
+    GenServer.call(__MODULE__, {:request, req})
+  end
+
+  def request(:delete, url, body) do
+    req = Req.new(
+      method: :delete,
+      base_url: @discord_url,
+      url: url,
+      body: Jason.encode!(body)
+    )
+
+    GenServer.call(__MODULE__, {:request, req})
+  end
+
+  def init(state), do: {:ok, state}
+
+  def handle_call({:request, req}, _from, state) do
+    req = Req.merge(req, 
+      headers: %{
+        authorization: "Bot #{state.token}",
+        user_agent: "Excord 1.0.0-rc.1 (https://github.com/PenguinBoi12/excord)",
+        content_type: "application/json"
+      })
+
+    {_, resp} = Req.run!(req, decode_json: [keys: :atoms])
+    {:reply, resp, state}
+  end
 end

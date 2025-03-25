@@ -14,6 +14,9 @@ defmodule Excord.Bot do
       import unquote(__MODULE__)
       require Logger
 
+      # Should we do this or let bot implicitly called those
+      alias Excord.Api.{Message, Channel}
+
       @cogs []
       @events []
       @otp_app unquote(opts)[:otp_app] || raise("bot expects :otp_app to be given")
@@ -65,7 +68,8 @@ defmodule Excord.Bot do
         config = Application.get_env(@otp_app, __MODULE__)
 
         children = [
-          {Excord.Api.Gateway, [module: __MODULE__, config: config]},
+          {Excord.Api, [module: __MODULE__, config: config]},
+          {Excord.Api.Gateway, [module: __MODULE__, config: config]}
         ]
 
         Supervisor.init(children, strategy: :one_for_one)

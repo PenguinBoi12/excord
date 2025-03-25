@@ -5,7 +5,10 @@ defmodule Excord.Api.Channel do
   See: https://discord.com/developers/docs/resources/channel
   """
   alias Excord.Api
-  alias Excord.Type.{Channel, Message}
+  alias Excord.Type.{Message, Channel}
+
+  @type snowflake :: String.t() | Integer.t()
+  @type result :: {:ok, Message.t() | Channel.t()} | {:error, Integer.t()}
 
   @route "/channels/"
 
@@ -19,6 +22,10 @@ defmodule Excord.Api.Channel do
   {:ok, %Excord.Type.TextChannel{}}
   ```
   """
+  @spec get(snowflake()) :: result()
+  def get(id) when is_integer(id),
+    do: get(to_string(id))
+
   def get(id) do
     case Api.request(:get, @route <> id) do
       %{status: 200, body: body} -> Channel.from_map(body)
@@ -47,6 +54,10 @@ defmodule Excord.Api.Channel do
   - `permission_overwrites` ([Overwrite, ...])
   - `parent_id` (string)
   """
+  @spec get(snowflake(), keyword()) :: result()
+  def get(id, options) when is_integer(id),
+    do: update(to_string(id), options)
+
   def update(id, options) do
     case Api.request(:post, @route <> id, body: options) do
       %{status: 200, body: body} -> Channel.from_map(body)
@@ -82,8 +93,12 @@ defmodule Excord.Api.Channel do
   Note: Must provide at least one of `content`, `embeds`, `sticker_ids`,
         `components`,`files[n]`, or `poll`.
   """
+  @spec send_message(snowflake(), keyword()) :: result()
+  def send_message(id, options) when is_integer(id),
+    do: send_message(to_string(id), options)
+
   def send_message(id, options) do
-    case Api.request(:post, @route <> id <> "/messages", options) do
+    case Api.request(:post, @route <> id <> "/messages", Enum.into(options, %{})) do
       %{status: 200, body: body} -> Message.from_map(body)
       %{status: status} -> {:error, status}
     end

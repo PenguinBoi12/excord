@@ -29,6 +29,8 @@ defmodule Excord.Api.Application do
     {:ok, %User{id: app_id}} = me(bot)
 
     # 2. Build list of commands
+    IO.inspect(commands)
+
     commands =
       Enum.map(commands, fn {name, _mod} ->
         %{
@@ -39,24 +41,6 @@ defmodule Excord.Api.Application do
         }
       end)
 
-    IO.inspect(commands, label: "registered commands")
-
-    # bot
-    # |> Excord.Api.request(:put, @route <> "#{app_id}/commands", commands)
-
-    # 3. Sync commands
-    case Excord.Api.request(bot, :put, "#{@route}#{app_id}/commands", commands) do
-      {:ok, %Req.Response{status: 200}} ->
-        Logger.info("Synced #{length(commands)} commands for #{inspect(bot)}")
-        :ok
-
-      # {:ok, %Req.Response{status: code, body: body}} ->
-      #   Logger.error("Failed to sync commands (#{code}): #{inspect(body)}")
-      #   {:error, body}
-
-      error ->
-        Logger.error("Unexpected error during sync: #{inspect(error)}")
-        error
-    end
+    # Api.request(bot, :put, "#{@route}#{app_id}/commands", commands)
   end
 end

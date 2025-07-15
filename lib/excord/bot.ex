@@ -101,6 +101,17 @@ defmodule Excord.Bot do
         nil
       end
 
+      on interaction_create(interaction) do
+        data = Map.get(interaction, :data)
+
+        name = Map.get(data, :name, "")
+        args = Map.get(data, :options, [])
+
+        IO.inspect(args)
+
+        handle_command(:"#{name}", interaction, args)
+      end
+
       defoverridable handle_command: 3, handle_command: 4, handle_event: 2
     end
   end
@@ -109,6 +120,11 @@ defmodule Excord.Bot do
     {name, ctx, args} = func
 
     quote do
+      options = Module.get_attribute(__MODULE__, :options)
+      desc = Module.get_attribute(__MODULE__, :description)
+
+      IO.inspect(options)
+
       @commands [{unquote(name), __MODULE__} | @commands]
 
       Logger.debug("Registering command #{inspect(__MODULE__)}.#{unquote(name)}")

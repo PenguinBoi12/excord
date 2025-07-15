@@ -83,6 +83,10 @@ defmodule Excord.Api.Event do
 
   # PRESENCE
 
-  def handle_event(event, _data, _state),
+  # INTERACTION
+  def handle_event("INTERACTION_CREATE", data),
+    do: {:on_interaction_create, data}
+
+  def handle_event(event, _data),
     do: Logger.warning("Event #{event} not found")
 end

@@ -23,7 +23,7 @@ defmodule Excord.Bot do
 
       unquote(server())
       unquote(handlers())
-      unquote(entry_points())
+      unquote(entrypoints())
 
       @before_compile unquote(__MODULE__)
     end
@@ -152,7 +152,7 @@ defmodule Excord.Bot do
     end
   end
 
-  defp entry_points do
+  def entrypoints do
     quote do
       @api_process Module.concat(__MODULE__, Excord.Api)
 
@@ -165,9 +165,14 @@ defmodule Excord.Bot do
       message(:send, content: "Hello World")
       ```
       """
-      def message(function, args) do
-        apply(Excord.Api.Message, function, [__MODULE__ | args])
-      end
+      def message(operation, args) when is_list(args),
+        do: apply(Excord.Api.Message, operation, [@api_process | args])
+
+      def message(operation, args),
+        do: message(operation, [args])
+
+      def message(operation, args, options),
+        do: message(operation, [args, options])
 
       @doc """
       Entrypoint for discord's channel endpoint
@@ -175,12 +180,17 @@ defmodule Excord.Bot do
       ## Examples
 
       ```elixir
-      channel(:send_message)
+      
       ```
       """
-      def channel(function, args) do
-        apply(Excord.Api.Channel, function, [__MODULE__ | args])
-      end
+      def channel(operation, args) when is_list(args),
+        do: apply(Excord.Api.Channel, operation, [@api_process | args])
+
+      def channel(operation, args),
+        do: channel(operation, [args])
+
+      def channel(operation, args, options),
+        do: channel(operation, [@api_process, args, options])
     end
   end
 end

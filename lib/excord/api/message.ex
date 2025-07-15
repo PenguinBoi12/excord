@@ -13,7 +13,7 @@ defmodule Excord.Api.Message do
   @typedoc false
   @type result :: {:ok, Message.t()} | {:error, Integer.t()}
 
-  @route "/messages"
+  # @route "/messages"
 
   @doc """
   Post a message to a guild text or DM channel.
@@ -27,10 +27,10 @@ defmodule Excord.Api.Message do
   {:ok, message}
   ```
   """
-  @spec send(TextChannel.t() | Context.t(), keyword()) :: result()
-  def send(%Context{channel: channel}, options),
-    do: Excord.Api.Channel.send_message(channel.id, options)
+  @spec send(pid(), TextChannel.t() | Context.t(), keyword()) :: result()
+  def send(bot, %Context{channel: channel}, options),
+    do: Excord.Api.Channel.send_message(bot, channel.id, options)
 
-  def send(%TextChannel{id: channel_id}, options),
-    do: Excord.Api.Channel.send_message(channel_id, options)
+  def send(bot, %TextChannel{id: channel_id}, options),
+    do: Excord.Api.Channel.send_message(bot, channel_id, options)
 end

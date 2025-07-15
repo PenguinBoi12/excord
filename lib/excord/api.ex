@@ -15,13 +15,13 @@ defmodule Excord.Api do
       token: token
     }
 
-    # name = Module.concat(module, Excord.Api)
-    GenServer.start_link(__MODULE__, state, name: __MODULE__)
+    name = Module.concat(module, Excord.Api)
+    GenServer.start_link(__MODULE__, state, name: name)
   end
 
-  def request(method, url, params_or_body \\ [])
+  def request(bot, method, url, params_or_body \\ [])
 
-  def request(:get, url, params) do
+  def request(bot, :get, url, params) do
     req = Req.new(
       method: :get,
       base_url: @discord_url,
@@ -29,10 +29,10 @@ defmodule Excord.Api do
       params: params
     )
 
-    GenServer.call(__MODULE__, {:request, req})
+    GenServer.call(bot, {:request, req})
   end
 
-  def request(:post, url, body) do
+  def request(bot, :post, url, body) do
     req = Req.new(
       method: :post,
       base_url: @discord_url,
@@ -40,10 +40,10 @@ defmodule Excord.Api do
       body: Jason.encode!(body)
     )
 
-    GenServer.call(__MODULE__, {:request, req})
+    GenServer.call(bot, {:request, req})
   end
 
-  def request(:put, url, body) do
+  def request(bot, :put, url, body) do
     req = Req.new(
       method: :put,
       base_url: @discord_url,
@@ -51,10 +51,10 @@ defmodule Excord.Api do
       body: Jason.encode!(body)
     )
 
-    GenServer.call(__MODULE__, {:request, req})
+    GenServer.call(bot, {:request, req})
   end
 
-  def request(:delete, url, body) do
+  def request(bot, :delete, url, body) do
     req = Req.new(
       method: :delete,
       base_url: @discord_url,
@@ -62,7 +62,7 @@ defmodule Excord.Api do
       body: Jason.encode!(body)
     )
 
-    GenServer.call(__MODULE__, {:request, req})
+    GenServer.call(bot, {:request, req})
   end
 
   def init(state), do: {:ok, state}

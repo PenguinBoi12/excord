@@ -14,12 +14,18 @@ defmodule Excord.Bot do
       import unquote(__MODULE__)
       require Logger
 
+      # Should we do this or let bot implicitly called those?
+      alias Excord.Api.{Message, Channel}
+
       @cogs []
       @events []
+      @commands []
+
       @otp_app unquote(opts)[:otp_app] || raise("bot expects :otp_app to be given")
 
       unquote(server())
       unquote(handlers())
+      unquote(entrypoints())
 
       @before_compile unquote(__MODULE__)
     end
@@ -27,13 +33,9 @@ defmodule Excord.Bot do
 
   defmacro __before_compile__(_env) do
     quote do
-      def __events__ do
-        @events
-      end
-
-      def __cogs__ do
-        @cogs
-      end
+      def __events__, do: @events
+      def __cogs__, do: @cogs
+      def __commands__, do: @commands
     end
   end
 
@@ -73,6 +75,7 @@ defmodule Excord.Bot do
 
         children = [
           {Registry, keys: :duplicate, name: :"event_registry_#{bot}"},
+          {Excord.Api, [module: __MODULE__, config: config]},
           {Excord.Api.Gateway, [module: __MODULE__, config: config]}
         ]
 
@@ -106,7 +109,9 @@ defmodule Excord.Bot do
     {name, ctx, args} = func
 
     quote do
-      Logger.debug("Registering command #{unquote(name)}")
+      @commands [{unquote(name), __MODULE__} | @commands]
+
+      Logger.debug("Registering command #{inspect(__MODULE__)}.#{unquote(name)}")
       unquote({:def, ctx, [{name, ctx, args}, body]})
 
       def handle_command(unquote(name), ctx, args) do
@@ -123,7 +128,7 @@ defmodule Excord.Bot do
       unquote({:def, ctx, [{event, ctx, args}, body]})
 
       unless Enum.member?(@events, unquote(event)) do
-        Logger.debug("Registering event #{__MODULE__}.#{unquote(event)}")
+        Logger.debug("Registering event #{inspect(__MODULE__)}.#{unquote(event)}")
         @events [{:bot, unquote(event)} | @events]
 
         def __register_event__(bot, unquote(event)) do
@@ -154,6 +159,63 @@ defmodule Excord.Bot do
             end
           end
       end))
+    end
+  end
+
+  def entrypoints do
+    quote do
+      @api_process Module.concat(__MODULE__, Excord.Api)
+
+      @doc """
+      Entrypoint for discord's message endpoint
+
+      ## Examples
+
+      ```elixir
+      message(:send, content: "Hello World")
+      ```
+      """
+      def message(operation, args) when is_list(args),
+        do: apply(Excord.Api.Message, operation, [@api_process | args])
+
+      def message(operation, args),
+        do: message(operation, [args])
+
+      def message(operation, args, options),
+        do: message(operation, [args, options])
+
+      @doc """
+      Entrypoint for discord's channel endpoint
+
+      ## Examples
+
+      ```elixir
+      channel(:get, 123456789123456789)
+      ```
+      """
+      def channel(operation, args) when is_list(args),
+        do: apply(Excord.Api.Channel, operation, [@api_process, args])
+
+      def channel(operation, args),
+        do: channel(operation, [args])
+
+      def channel(operation, args, options),
+        do: channel(operation, [args, options])
+
+      @doc """
+      Entrypoint for discord's application endpoint
+
+      ## Examples
+
+      ```elixir
+      application(:sync, commands)
+      ```
+      """
+      def application(operation, args) when is_list(args),
+        do: apply(Excord.Api.Application, operation, [@api_process, args])
+
+      def application(operation, args),
+        do: application(operation, [args])
     end
   end
 end

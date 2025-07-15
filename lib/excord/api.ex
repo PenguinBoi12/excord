@@ -1,50 +1,81 @@
 defmodule Excord.Api do
+  use GenServer
+
   require Req
   require Jason
 
-  # move this to configs?
   @discord_version 10
   @discord_url "https://discord.com/api/v#{@discord_version}"
 
-  def request(method, token, url, args \\ []) do
+  def start_link([module: module, config: config]) do
+    token = Keyword.get(config, :token) || raise "'token' is missing"
+
+    state = %{
+      bot: module,
+      token: token
+    }
+
+    name = Module.concat(module, Excord.Api)
+    GenServer.start_link(__MODULE__, state, name: name)
+  end
+
+  def request(bot, method, url, params_or_body \\ [])
+
+  def request(bot, :get, url, params) do
     req = Req.new(
-      method: method,
+      method: :get,
       base_url: @discord_url,
       url: url,
-      headers: %{
-        authorization: "bearer #{token}",
-        user_agent: "Excord (https://github.com/PenguinBoi12/excord, 1.0.0-rc.1)"
-      }
+      params: params
     )
 
-    do_request(req, args)
+    GenServer.call(bot, {:request, req})
   end
 
-  defp do_request(%{method: :get} = req, params) do
-    req = Req.merge(req, params: params)
-    {_, resp} = Req.run(req)
+  def request(bot, :post, url, body) do
+    req = Req.new(
+      method: :post,
+      base_url: @discord_url,
+      url: url,
+      body: Jason.encode!(body)
+    )
 
-    resp
+    GenServer.call(bot, {:request, req})
   end
 
-  defp do_request(%{method: :post} = req, params) do
-    req = Req.merge(req, params: params)
-    {_, resp} = Req.run(req)
+  def request(bot, :put, url, body) do
+    req = Req.new(
+      method: :put,
+      base_url: @discord_url,
+      url: url,
+      body: Jason.encode!(body)
+    )
 
-    resp
+    GenServer.call(bot, {:request, req})
   end
 
-  defp do_request(%{method: :put} = req, params) do
-    req = Req.merge(req, params: params)
-    {_, resp} = Req.run(req)
+  def request(bot, :delete, url, body) do
+    req = Req.new(
+      method: :delete,
+      base_url: @discord_url,
+      url: url,
+      body: Jason.encode!(body)
+    )
 
-    resp
+    GenServer.call(bot, {:request, req})
   end
 
-  defp do_request(%{method: :delete} = req, params) do
-    req = Req.merge(req, params: params)
-    {_, resp} = Req.request(req)
+  def init(state), do: {:ok, state}
 
-    resp
+  def handle_call({:request, req}, _from, state) do
+    req = Req.merge(req, 
+      headers: %{
+        authorization: "Bot #{state.token}",
+        user_agent: "Excord 1.0.0-rc.1 (https://github.com/PenguinBoi12/excord)",
+        content_type: "application/json"
+      })
+
+    {_, resp} = Req.run!(req, decode_json: [keys: :atoms])
+    {:reply, resp, state}
   end
 end

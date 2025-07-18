@@ -116,23 +116,45 @@ defmodule Excord.Bot do
     end
   end
 
-  defmacro command(func, body) do
-    {name, ctx, args} = func
+  defmacro command({name, meta, args}, do: block) do
+    {opts_ast, body_ast} = extract_options_block(block)
 
     quote do
-      options = Module.get_attribute(__MODULE__, :options)
-      desc = Module.get_attribute(__MODULE__, :description)
+      Module.register_attribute(__MODULE__, :current_command_options, accumulate: true)
+      unquote(opts_ast)
 
-      IO.inspect(options)
-
-      @commands [{unquote(name), __MODULE__} | @commands]
+      options = Module.get_attribute(__MODULE__, :current_command_options) || []
+      @commands [{unquote(name), __MODULE__, options} | @commands]
 
       Logger.debug("Registering command #{inspect(__MODULE__)}.#{unquote(name)}")
-      unquote({:def, ctx, [{name, ctx, args}, body]})
+
+      def unquote(name)(unquote_splicing(args)) do
+        unquote(body_ast)
+      end
 
       def handle_command(unquote(name), ctx, args) do
         apply(__MODULE__, unquote(name), [ctx, args])
       end
+    end
+  end
+
+  defp extract_options_block({:__block__, _, lines}) do
+    options_block = Enum.find(lines, fn
+      {:options, _, _} -> true
+      _ -> false
+    end)
+
+    rest = Enum.reject(lines, &(&1 == options_block))
+
+    {options_block || nil, {:__block__, [], rest}}
+  end
+
+  defp extract_options_block(other), do: {nil, other}
+
+  defmacro options(do: block) do
+    quote do
+      import Excord.OptionTypes
+      unquote(block)
     end
   end
 

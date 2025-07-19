@@ -2,22 +2,10 @@ defmodule Excord.Api.Event do
   require Logger
 
   def dispatch(bot, event, data) do
-    event_registry = :"event_registry_#{bot}"
-
-    Registry.dispatch event_registry, event, fn entries ->
+    Registry.dispatch :event_registry, bot, fn entries ->
       for {_pid, module} <- entries do
         try do
-          apply(module, event, [data])
-        rescue e ->
-          Logger.error("Error dispatching #{event} to #{inspect(module)}: #{inspect(e)}")
-        end
-      end
-    end
-
-    Registry.dispatch :shared_event_registry, event, fn entries ->
-      for {_pid, module} <- entries do
-        try do
-          apply(module, event, [data])
+          apply(module, :handle_event, [event, data])
         rescue e ->
           Logger.error("Error dispatching #{event} to #{inspect(module)}: #{inspect(e)}")
         end
@@ -25,13 +13,8 @@ defmodule Excord.Api.Event do
     end
   end
 
-  def register(bot, event, module) do
-    event_registry = :"event_registry_#{bot}"
-    Registry.register(event_registry, event, module)
-  end
-
-  def register(event, module),
-    do: Registry.register(:shared_event_registry, event, module)
+  def register(bot, module),
+    do: Registry.register(:event_registry, bot, module)
 
   def handle_event("READY", data), 
     do: {:on_ready, data}

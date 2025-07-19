@@ -4,7 +4,6 @@ defmodule Excord.Cog do
       import unquote(__MODULE__)
       require Logger
 
-      @events []
       @commands []
       @current_cog unquote(name)
 
@@ -14,13 +13,9 @@ defmodule Excord.Cog do
 
   defmacro __before_compile__(_env) do
     quote do
-      def __commands__ do
-        @commands
-      end
+      def __commands__, do: @commands
 
-      def __events__ do
-        @events
-      end
+      def handle_event(event, data), do: nil
     end
   end
 
@@ -54,19 +49,12 @@ defmodule Excord.Cog do
     end
   end
 
-  defmacro on(func, body) do
-    {name, ctx, args} = func
-    event = :"on_#{name}"
+  defmacro on({name, _ctx, args}, do: block) do
+    event = String.to_atom("on_#{name}")
 
     quote do
-      unquote({:def, ctx, [{event, ctx, args}, body]})
-
-      unless Enum.member?(@events, unquote(event)) do
-        @events [{:bot, unquote(event)} | @events]
-
-        def __register_event__(bot, unquote(event)) do
-          Excord.Api.Event.register(bot, unquote(event), __MODULE__)
-        end
+      def handle_event(unquote(event), unquote_splicing(args)) do
+        unquote(block)
       end
     end
   end

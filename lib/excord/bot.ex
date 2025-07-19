@@ -18,7 +18,6 @@ defmodule Excord.Bot do
       alias Excord.Api.{Message, Channel}
 
       @cogs []
-      @events []
       @commands []
 
       @otp_app unquote(opts)[:otp_app] || raise("bot expects :otp_app to be given")
@@ -33,9 +32,10 @@ defmodule Excord.Bot do
 
   defmacro __before_compile__(_env) do
     quote do
-      def __events__, do: @events
       def __cogs__, do: @cogs
       def __commands__, do: @commands
+
+      def handle_event(event, data), do: nil
     end
   end
 
@@ -54,14 +54,8 @@ defmodule Excord.Bot do
       def start_link(opts \\ []) do
         {:ok, pid} = Supervisor.start_link(__MODULE__, [unquote(__MODULE__)], name: __MODULE__)
 
-        # I'm unsure if this is how we want to handle bot vs shared
         Enum.each [__MODULE__ | __cogs__()], fn module ->
-          Enum.each module.__events__(), fn
-            {:shared, event} ->
-              module.__register_event__(event)
-            {:bot, event} ->
-              module.__register_event__(__MODULE__, event)
-            end
+          Excord.Api.Event.register(__MODULE__, module)
         end
 
         {:ok, pid}
@@ -71,10 +65,7 @@ defmodule Excord.Bot do
         config = Application.get_env(@otp_app, __MODULE__)
         bot = to_string(__MODULE__) |> String.to_atom()
 
-        registry_name = :"event_registry_#{bot}"
-
         children = [
-          {Registry, keys: :duplicate, name: :"event_registry_#{bot}"},
           {Excord.Api, [module: __MODULE__, config: config]},
           {Excord.Api.Gateway, [module: __MODULE__, config: config]}
         ]
@@ -97,8 +88,8 @@ defmodule Excord.Bot do
         {:error, :command_not_found}
       end
 
-      def handle_event(_, _) do
-        nil
+      def handle_event(event, data) do
+        {:error, :event_not_overriden}
       end
 
       defoverridable handle_command: 3, handle_command: 4, handle_event: 2
@@ -120,20 +111,14 @@ defmodule Excord.Bot do
     end
   end
 
-  defmacro on(func, body) do
-    {name, ctx, args} = func
+  defmacro on({name, _meta, args}, do: block) do
     event = String.to_atom("on_#{name}")
 
     quote do
-      unquote({:def, ctx, [{event, ctx, args}, body]})
+      Logger.debug("Registering event #{inspect(__MODULE__)}.#{unquote(event)}")
 
-      unless Enum.member?(@events, unquote(event)) do
-        Logger.debug("Registering event #{inspect(__MODULE__)}.#{unquote(event)}")
-        @events [{:bot, unquote(event)} | @events]
-
-        def __register_event__(bot, unquote(event)) do
-          Excord.Api.Event.register(bot, unquote(event), __MODULE__)
-        end
+      def handle_event(unquote(event), unquote_splicing(args)) do
+        unquote(block)
       end
     end
   end
@@ -194,7 +179,7 @@ defmodule Excord.Bot do
       ```
       """
       def channel(operation, args) when is_list(args),
-        do: apply(Excord.Api.Channel, operation, [@api_process, args])
+        do: apply(Excord.Api.Channel, operation, [@api_process | args])
 
       def channel(operation, args),
         do: channel(operation, [args])
@@ -212,7 +197,7 @@ defmodule Excord.Bot do
       ```
       """
       def application(operation, args) when is_list(args),
-        do: apply(Excord.Api.Application, operation, [@api_process, args])
+        do: apply(Excord.Api.Application, operation, [@api_process | args])
 
       def application(operation, args),
         do: application(operation, [args])

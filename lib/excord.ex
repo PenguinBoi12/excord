@@ -3,8 +3,8 @@ defmodule Excord do
 
   def start(_type, _args) do
     children = [
-    	{Registry, keys: :duplicate, name: :shared_event_registry},
-  	]
+      {Registry, keys: :duplicate, name: :event_registry},
+    ]
 
     Supervisor.start_link(children, strategy: :one_for_one)
   end

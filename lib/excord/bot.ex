@@ -232,7 +232,7 @@ defmodule Excord.Bot do
       ```
       """
       def channel(operation, args) when is_list(args),
-        do: apply(Excord.Api.Channel, operation, [@api_process, args])
+        do: apply(Excord.Api.Channel, operation, [@api_process | args])
 
       def channel(operation, args),
         do: channel(operation, [args])
@@ -250,7 +250,7 @@ defmodule Excord.Bot do
       ```
       """
       def application(operation, args) when is_list(args),
-        do: apply(Excord.Api.Application, operation, [@api_process, args])
+        do: apply(Excord.Api.Application, operation, [@api_process | args])
 
       def application(operation, args),
         do: application(operation, [args])

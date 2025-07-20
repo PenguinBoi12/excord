@@ -65,6 +65,16 @@ defmodule Excord.Api.Channel do
     end
   end
 
+  @spec delete(pid(), snowflake()) :: result
+  def delete(bot, id) do
+    Api.expire_cache(bot, :get, @route <> id)
+
+    case Api.request(bot, :delete, @route <> id) do
+      %{status: 204} -> {:ok, 0}
+      %{status: status} -> {:error, status}
+    end
+  end
+
   @doc """
   Post a message to a guild text or DM channel.
 

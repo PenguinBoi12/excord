@@ -24,7 +24,8 @@ defmodule Excord.MixProject do
     [
       {:req, "~> 0.5.0"},
       {:websockex, "~> 0.4.3"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:cachex, "~> 4.1.1"}
     ]
   end
 end

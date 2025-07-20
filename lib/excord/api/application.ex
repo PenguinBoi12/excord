@@ -10,37 +10,59 @@ defmodule Excord.Api.Application do
   alias Excord.Type.User
 
   @type snowflake :: String.t() | Integer.t()
-  @type result :: {:ok, User.t()} | {:error, Integer.t()}
+  @type result :: {:ok, User.t() | map()} | {:error, Integer.t() | map()}
 
   @route "/applications/"
+
+  defp build_route(app_id, [guild: guild]),
+    do: "#{@route}#{app_id}/guilds/#{guild}"
+
+  defp build_route(app_id, _),
+    do: "#{@route}#{app_id}"
 
   @spec me(pid()) :: result()
   def me(bot) do
     case Api.request(bot, :get, @route <> "@me") do
       %{status: 200, body: body} -> User.from_map(body)
-      %{status: status} -> {:error, status}
+      err -> {:error, err}
     end
   end
 
-  def sync(bot, commands) do
-    Logger.warning("Syncing slash commands for #{inspect(bot)}")
+  @spec sync(pid(), list(), keyword()) :: result()
+  def sync(bot, commands, opts \\ []) do
+    Logger.warning("Syncing application commands for #{inspect(bot)}")
 
-    # # 1. Get application ID
-    {:ok, %User{id: app_id}} = me(bot)
+    with {:ok, %User{id: app_id}} <- me(bot),
+         route <- build_route(app_id, opts),
+         payloads <- build_commands(commands),
+         {:ok, resp} <- register_commands(bot, route, payloads) do
+      {:ok, resp}
+    else
+      {:error, reason} ->
+        Logger.error("Failed to register commands: #{inspect(reason)}")
+        {:error, reason}
 
-    # 2. Build list of commands
-    IO.inspect(commands)
+      err ->
+        Logger.error("Unexpected error: #{inspect(err)}")
+        {:error, err}
+    end
+  end
 
-    commands =
-      Enum.map(commands, fn {name, _mod} ->
-        %{
-          name: Atom.to_string(name),
-          description: "Slash command for #{name}", # we might be able to fetch this from @doc/@description
-          type: 1, # Chat Input
-          options: [] # Extend later if needed
-        }
-      end)
+  defp build_commands(commands) do
+    Enum.map commands, fn {_mod, name, options, description} ->
+      %{
+        type: 1,
+        name: Atom.to_string(name),
+        description: description,
+        options: options
+      }
+    end
+  end
 
-    # Api.request(bot, :put, "#{@route}#{app_id}/commands", commands)
+  defp register_commands(bot, route, payloads) do
+    case Api.request(bot, :put, "#{route}/commands", payloads) do
+      %{status: 200} = response -> {:ok, response}
+      error_response -> {:error, error_response}
+    end
   end
 end

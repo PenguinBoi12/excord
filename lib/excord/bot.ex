@@ -14,9 +14,6 @@ defmodule Excord.Bot do
       import unquote(__MODULE__)
       require Logger
 
-      # Should we do this or let bot implicitly called those?
-      alias Excord.Api.{Message, Channel}
-
       @cogs []
       @commands []
 
@@ -112,13 +109,15 @@ defmodule Excord.Bot do
     {opts_ast, body_ast} = extract_options_block(block)
 
     quote do
+      Logger.debug("Registering command #{inspect(__MODULE__)}.#{unquote(name)}")
+
       Module.register_attribute(__MODULE__, :current_command_options, accumulate: true)
       unquote(opts_ast)
 
       options = Module.get_attribute(__MODULE__, :current_command_options) || []
-      @commands [{unquote(name), __MODULE__, options} | @commands]
+      description = Module.get_attribute(__MODULE__, :description) || ""
 
-      Logger.debug("Registering command #{inspect(__MODULE__)}.#{unquote(name)}")
+      @commands [{__MODULE__, unquote(name), options, description} | @commands]
 
       def unquote(name)(unquote_splicing(args)) do
         unquote(body_ast)
@@ -235,11 +234,14 @@ defmodule Excord.Bot do
       application(:sync, commands)
       ```
       """
-      def application(operation, args) when is_list(args),
-        do: apply(Excord.Api.Application, operation, [@api_process | args])
+      def application(operation, args \\ [], options \\ [])
 
-      def application(operation, args),
-        do: application(operation, [args])
+      def application(operation, args, options) when is_list(args) and is_list(options),
+        do: apply(Excord.Api.Application, operation, [@api_process | args ++ [options]])
+
+      def application(operation, arg, options),
+        do: application(operation, [arg], options)
+
     end
   end
 end
